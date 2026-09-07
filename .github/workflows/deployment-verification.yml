@@ -221,20 +221,39 @@ jobs:
 
       - name: The server answers a Source query on its own port
         run: |
-          # A2S_INFO over UDP, from inside the container's namespace: the reply
-          # begins with the 0x49 header. Proves the process is not merely alive
-          # but listening on the port the file says it binds.
+          # HEALTHY IS NOT LISTENING. The health check says the srcds process
+          # exists, which it does ten seconds after start; the map takes a
+          # minute or more to load on a runner, and a query sent before that
+          # times out. The first run of this job did exactly that. So: A2S_INFO
+          # over UDP, from inside the container's namespace, retried for up to
+          # six minutes. The reply begins with the 0x49 header, which proves the
+          # server is not merely alive but listening on the port the file says
+          # it binds.
           cid="$(docker compose -f l4d2-server-docker-compose.yml -p l4d2 ps -q l4d2-server)"
-          docker run --rm --network "container:$cid" python:3.13-alpine python3 -c '
-          import socket
-          s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(10)
+          for attempt in $(seq 1 36); do
+            if docker run --rm --network "container:$cid" python:3.13-alpine python3 -c '
+          import socket, sys
+          s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(8)
           req = b"\xff\xff\xff\xff\x54Source Engine Query\x00"
-          s.sendto(req, ("127.0.0.1", 27015)); d, _ = s.recvfrom(4096)
-          if d[4:5] == b"\x41":
-              s.sendto(req + d[5:9], ("127.0.0.1", 27015)); d, _ = s.recvfrom(4096)
-          assert d[4:5] == b"\x49", d[:8]
+          try:
+              s.sendto(req, ("127.0.0.1", 27015)); d, _ = s.recvfrom(4096)
+              if d[4:5] == b"\x41":
+                  s.sendto(req + d[5:9], ("127.0.0.1", 27015)); d, _ = s.recvfrom(4096)
+          except OSError:
+              sys.exit(1)
+          if d[4:5] != b"\x49":
+              sys.exit(1)
           print("A2S_INFO answered:", d[6:60].split(b"\x00")[0].decode(errors="replace"))
-          '
+          ' 2>/dev/null; then
+              echo "answered on attempt $attempt"
+              exit 0
+            fi
+            echo "attempt $attempt: no reply yet"
+            sleep 10
+          done
+          echo "::error::the server never answered A2S_INFO on 27015"
+          docker logs "$cid" 2>&1 | tail -60
+          exit 1
 
       - name: Stop
         if: always()
