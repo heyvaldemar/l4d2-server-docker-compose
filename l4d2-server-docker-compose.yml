@@ -1,0 +1,95 @@
+# Image pin lives HERE, as an interpolation default, so `git pull` (or
+# re-downloading this file) delivers the exact image this repository has
+# tested. Set L4D2_SERVER_IMAGE_VERSION in .env to run a different tag while
+# the digest for it is fetched normally, or L4D2_SERVER_IMAGE_TAG to replace
+# the whole reference. CI (the Trivy scan and check-pin-freshness) reads the
+# pin from this line: this block is the single source of truth.
+#
+# The tag is `master` because that is the only tag this image publishes with
+# the game inside; there is no version number. The digest is the version, and
+# the daily freshness check is what notices a rebuild.
+x-images:
+  l4d2-server: &l4d2-server-image ${L4D2_SERVER_IMAGE_TAG:-jackzmc/srcds-l4d2:${L4D2_SERVER_IMAGE_VERSION:-master@sha256:2b20f558eb5e7f084b61d99e15807e30d3d6f5805b9dd2da675f8647a1a6701d}}
+
+services:
+  l4d2-server:
+    image: *l4d2-server-image
+    # Handles untrusted input from the internet and cannot gain privileges
+    # through a setuid binary.
+    security_opt:
+      - no-new-privileges:true
+    # 3g is measured, not guessed: a four-player co-op server peaked at 432 MB
+    # on the machine this template comes from. The ceiling is there so a leak
+    # here cannot pick a victim elsewhere — with no limit the kernel's OOM
+    # killer chooses by size, so the process it kills is rarely the one at
+    # fault.
+    deploy:
+      resources:
+        limits:
+          memory: ${L4D2_SERVER_MEMORY_LIMIT:-3g}
+          cpus: "${L4D2_SERVER_CPU_LIMIT:-2.0}"
+        reservations:
+          memory: ${L4D2_SERVER_MEMORY_RESERVATION:-512m}
+          cpus: "${L4D2_SERVER_CPU_RESERVATION:-0.5}"
+    ports:
+      # THE NUMBER MUST MATCH INSIDE AND OUT. Steam's server list records the
+      # port the server binds, not the one you forwarded. Publish 27016 for a
+      # server bound on 27015 and the list hands players an address where a
+      # different server answers: the connection succeeds, the handshake fails
+      # against the wrong game, and every log line blames the client.
+      - "${L4D2_SERVER_PORT:-27015}:${L4D2_SERVER_PORT:-27015}/udp"
+      # rcon is TCP on the same number.
+      - "${L4D2_SERVER_PORT:-27015}:${L4D2_SERVER_PORT:-27015}/tcp"
+    # The image's entrypoint starts srcds_linux and appends whatever is here.
+    command:
+      - -usercon
+      - -port
+      - "${L4D2_SERVER_PORT:-27015}"
+      - +map
+      - "${L4D2_SERVER_START_MAP:-c8m1_apartment}"
+      - +exec
+      - server.cfg
+      - +sv_gametypes
+      - "${L4D2_SERVER_GAME_TYPES:-coop}"
+      - +rcon_password
+      - "${L4D2_SERVER_RCON_PASSWORD:?set in .env - see .env.example for generation command}"
+    volumes:
+      - ./server.cfg:/server/left4dead2/cfg/server.cfg:ro
+      # ADDONS LIVE OUTSIDE THE CONTAINER OR THEY DO NOT LIVE. The game sits in
+      # the image's writable layer, so every recreate — an image update, a
+      # config change — starts from a clean copy. A SourceMod installed inside
+      # works until the next recreate and then vanishes, taking whatever it
+      # provided with it and saying nothing.
+      - ./addons:/server/left4dead2/addons
+      # ONLY THE sourcemod SUBDIRECTORY, never the whole cfg/. The game ships
+      # its own cfg with 360controller.cfg, config_default.cfg and the rest;
+      # mounting over the directory would hide them and the server would start
+      # missing files it has always had.
+      - ./cfg/sourcemod:/server/left4dead2/cfg/sourcemod
+      # THE CAMPAIGN ORDER. The file the image ships lists four maps from the
+      # FIRST game under their pre-port names — l4d_hospital01_apartment and
+      # friends — which do not exist in this build, so the cycle pointed at
+      # nothing and every finale restarted the same campaign. Mounted because
+      # the image would put its own version back on the next update.
+      - ./mapcycle.txt:/server/left4dead2/mapcycle.txt:ro
+    healthcheck:
+      # EXACT MATCH. This image runs srcds_linux directly under its entrypoint,
+      # with no srcds_run wrapper between them, so a substring check would not
+      # lie here today. The anchored form is kept so it cannot start to when the
+      # image changes. tests/e2e-healthcheck.sh runs it against a real container.
+      test: ["CMD-SHELL", "grep -qsx srcds_linux /proc/[0-9]*/comm"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      # The game is baked into the image; two minutes covers the first map
+      # load and the SourceMod plugin load on a slow disk.
+      start_period: ${L4D2_SERVER_START_PERIOD:-120s}
+    # srcds writes its state on the way out. Ten seconds and a SIGKILL is
+    # enough to lose the campaign progress of the people playing.
+    stop_grace_period: ${L4D2_SERVER_STOP_GRACE_PERIOD:-30s}
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: ${L4D2_SERVER_LOG_MAX_SIZE:-10m}
+        max-file: "${L4D2_SERVER_LOG_MAX_FILE:-3}"
