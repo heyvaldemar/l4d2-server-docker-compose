@@ -149,6 +149,9 @@ jobs:
           exit "$status"
 
       - name: Say plainly what a rolling tag can and cannot promise
+        # Runs even when the digest comparison above failed, so one run
+        # reports every problem it can see instead of one per day.
+        if: always()
         run: |
           # This image publishes under a tag that moves (`latest`, `master`, the
           # game's name). There is no version number to compare against a release
