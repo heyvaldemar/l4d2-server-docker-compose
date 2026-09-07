@@ -9,15 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _(no unreleased changes yet)_
 
-## [1.0.0] - 2026-09-07
+## [1.1.0] - 2026-09-07
 
 ### Added
 
-- **A Left 4 Dead 2 co-op server**, image pinned by digest as an interpolation
-  default, so `git pull` delivers the build this repository has tested and
-  `.env` overrides survive it. The tag is `master` because upstream publishes
-  no version numbers: the digest is the version.
-- **Direct connect enabled.** `sv_allow_lobby_connect_only 0` in server.cfg;
+- **`update.sh`: move between release tags on purpose.** It updates to the latest release (a combination this repository's CI has booted and smoke-tested), refuses to cross a major version unattended, refuses to run over local changes, and names any new required variable before anything has moved. `--dry-run` says what would happen.
+
+`sv_allow_lobby_connect_only 0` in server.cfg;
   the game's default accepts only lobby arrivals and refuses `connect
   host:port` with nothing useful said.
 - **A campaign rotation that rotates.** The file the image ships lists four
@@ -45,5 +43,6 @@ _(no unreleased changes yet)_
   published port. The image is 3.3 GB compressed, which a runner can hold —
   the one Source server in this family for which that is true.
 
-[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/releases/tag/v1.0.0

@@ -63,7 +63,7 @@ docker compose -p l4d2 exec l4d2-server rcon sm_cyclenext
 
 ## Updating
 
-The pin lives in the `x-images` block at the top of the compose file, as an interpolation default, so a `git pull` delivers the image this repository has tested. The tag is `master` because upstream publishes no version numbers: the digest is the version. When Valve ships an update the image is rebuilt, the daily freshness check goes red, and the pin moves deliberately.
+The pin lives in the `x-images` block at the top of the compose file, as an interpolation default, so a `git pull` delivers the image this repository has tested. The tag is `master` because upstream publishes no version numbers: the digest is the version. When Valve ships an update the image is rebuilt, the daily freshness check goes red, and the pin moves deliberately. `./update.sh` does that on purpose: it moves to the latest release tag, refuses to cross a major unattended, and names any new required variable before anything has moved.
 
 ## Testing
 
