@@ -41,6 +41,13 @@ services:
       # rcon is TCP on the same number.
       - "${L4D2_SERVER_PORT:-27015}:${L4D2_SERVER_PORT:-27015}/tcp"
     # The image's entrypoint starts srcds_linux and appends whatever is here.
+    environment:
+      # THE GAME GETS THE HOUSEHOLD CLOCK TOO, not only whatever sidecar
+      # sits beside it. Every timestamp this server writes — bans, joins,
+      # the crash it leaves behind — is read next to a log line from
+      # somewhere else, and two clocks make that arithmetic. UTC by
+      # default, which is a choice rather than an accident.
+      TZ: ${L4D2_SERVER_TIMEZONE:-UTC}
     command:
       - -usercon
       - -port
