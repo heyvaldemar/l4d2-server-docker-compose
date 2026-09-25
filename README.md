@@ -1,6 +1,7 @@
 # L4D2 server using Docker Compose
 
 [![Deployment Verification](https://github.com/heyvaldemar/l4d2-server-docker-compose/actions/workflows/deployment-verification.yml/badge.svg?branch=main)](https://github.com/heyvaldemar/l4d2-server-docker-compose/actions/workflows/deployment-verification.yml)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14891/badge)](https://www.bestpractices.dev/projects/14891)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A Left 4 Dead 2 co-op server for a group of friends, pinned by digest, with a campaign rotation that actually rotates and three SourceMod plugins written for the problems a real group ran into.
