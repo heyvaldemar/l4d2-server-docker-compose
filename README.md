@@ -42,7 +42,7 @@ Players connect with `connect your-address:27015` from the developer console. No
 
 ## SourceMod
 
-Install [MetaMod:Source](https://www.sourcemm.net/downloads.php) and [SourceMod](https://www.sourcemod.net/downloads.php) for L4D2 into `addons/` on the host, then compile the plugins in `sourcemod/scripting/` with the compiler SourceMod ships and copy the `.smx` files to `addons/sourcemod/plugins/`. CI compiles all three on every push with a pinned compiler, so a plugin that stops compiling is a red run rather than a server silently running without it.
+Install [MetaMod:Source](https://github.com/alliedmodders/metamod-source/releases) and [SourceMod](https://github.com/alliedmodders/sourcemod/releases) for L4D2 into `addons/` on the host, then compile the plugins in `sourcemod/scripting/` with the compiler SourceMod ships and copy the `.smx` files to `addons/sourcemod/plugins/`. CI compiles all three on every push with a pinned compiler, so a plugin that stops compiling is a red run rather than a server silently running without it.
 
 | plugin | command | what it does |
 |---|---|---|

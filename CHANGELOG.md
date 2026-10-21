@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The SourceMod compile check fetched its compiler from a server that no longer serves it.** AlliedModders publishes SourceMod and MetaMod:Source as GitHub releases now, and from 2026-10-21 every path under `sm.alliedmods.net/smdrop/` answers 404, so the scheduled run failed before compiling anything. CI fetches the same pinned build, 1.12.0.7253, from its GitHub release; GitHub's digest for that asset is the checksum already pinned, so the compiler is byte for byte the one CI used before. The README's download links, both dead, point to the two projects' GitHub releases.
+
 ### Changed
 
 - **The freshness check has its own workflow, Pin Freshness.** It ran inside Deployment Verification, whose badge is the one at the top of this README. Across the fleet, nine red runs in ten were a pin one version behind - which the fleet's triage moves within the day - and a reader cannot tell that from a stack that does not boot. The badge now says whether the stack boots. The job itself is unchanged.

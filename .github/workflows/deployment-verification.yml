@@ -212,7 +212,12 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+    # AlliedModders publishes builds as GitHub releases now; the drop server
+    # (sm.alliedmods.net/smdrop) answered 404 for every path from 2026-10-21.
+    # The same build, the same bytes: GitHub's digest for this asset is the
+    # checksum pinned here.
     env:
+      SM_RELEASE: 1.12.0.7253
       SM_TARBALL: sourcemod-1.12.0-git7253-linux.tar.gz
       SM_SHA256: 6bbcab989cda0ada83600d0dcb0f46affd16529b2b02ed2dba1b5baeaf02fdb4
     steps:
@@ -221,7 +226,7 @@ jobs:
 
       - name: Fetch the compiler and check its checksum
         run: |
-          curl -fsSL "https://sm.alliedmods.net/smdrop/1.12/$SM_TARBALL" -o sm.tgz
+          curl -fsSL "https://github.com/alliedmodders/sourcemod/releases/download/$SM_RELEASE/$SM_TARBALL" -o sm.tgz
           echo "$SM_SHA256  sm.tgz" | sha256sum -c -
           mkdir -p sm && tar -xzf sm.tgz -C sm
 
