@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.2.1] - 2026-10-21
+
 ### Fixed
 
 - **The SourceMod compile check fetched its compiler from a server that no longer serves it.** AlliedModders publishes SourceMod and MetaMod:Source as GitHub releases now, and from 2026-10-21 every path under `sm.alliedmods.net/smdrop/` answers 404, so the scheduled run failed before compiling anything. CI fetches the same pinned build, 1.12.0.7253, from its GitHub release; GitHub's digest for that asset is the checksum already pinned, so the compiler is byte for byte the one CI used before. The README's download links, both dead, point to the two projects' GitHub releases.
@@ -60,7 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published port. The image is 3.3 GB compressed, which a runner can hold —
   the one Source server in this family for which that is true.
 
-[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/releases/tag/v1.0.0
