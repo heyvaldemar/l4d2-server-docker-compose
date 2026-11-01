@@ -96,7 +96,9 @@ HISTORY=${STEAM_UPTODATE_HISTORY:-.steam-uptodate-updates} # one epoch per updat
 SILENT=${STEAM_UPTODATE_SILENT_FILE:-.steam-uptodate-silent} # "<since> [warned]"
 HOST_LOCK=${STEAM_UPTODATE_HOST_LOCK:-/var/tmp/steam-uptodate.lock}
 HOST_STAMP=${STEAM_UPTODATE_HOST_STAMP:-/var/tmp/steam-uptodate.last}
-PROBE_IMAGE=${STEAM_UPTODATE_PROBE_IMAGE:-python:3.13-alpine}
+# The probe runs python from this image, inside the server's network namespace;
+# pinned by digest, so the tag being moved cannot change what runs there.
+PROBE_IMAGE=${STEAM_UPTODATE_PROBE_IMAGE:-python:3.13-alpine@sha256:7984cf56ceaddebe4fefeb75d64000b9f45d8b77b11a09b24524da6cdc3af0c8}
 MAX_TRIES=${STEAM_UPTODATE_MAX_TRIES:-3}
 WAIT=${STEAM_UPTODATE_WAIT:-1200}         # for Steam to call the new version current
 POLL=${STEAM_UPTODATE_POLL:-15}
