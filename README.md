@@ -62,13 +62,28 @@ docker compose -p l4d2 exec l4d2-server rcon changelevel c2m1_highway
 docker compose -p l4d2 exec l4d2-server rcon sm_cyclenext
 ```
 
+## Keeping the game current
+
+**A healthy server is not a joinable one.** On the machine this template comes from, Team Fortress 2 ran out of date for days in October 2026 while every check passed: the container was healthy, A2S answered, Steam listed the server, and the image watchers had nothing to say because the image had not changed. Players on the current client cannot join a server Steam calls out of date. Steam answers that question directly: `ISteamApps/UpToDateCheck` takes the version a server reports over A2S and says whether it is still accepted. `tools/steam-uptodate.sh` asks it every fifteen minutes. In this template the game is baked into the image, so there is nothing for the script to update: when Steam stops accepting the version the image carries, it says so once, and fails on every run after that, so the timer shows up in `systemctl --failed` until a newer image arrives in a template release and `./update.sh` takes it. The image has not needed one in the server's lifetime; this is how its reader would find out the day it does. A server that does not answer, or a Steam that does not, decides nothing, for up to six hours (`STEAM_UPTODATE_SILENCE`).
+
+"Says so" is one line in the journal every run, and, when `STEAM_UPTODATE_NOTIFY` is set, a message on its stdin the first time something new happens: a webhook, mail, anything that reads stdin. The service file has an example.
+
+```bash
+# edit the two paths in the service file to where this repository is checked out
+sudo cp systemd/steam-uptodate.service systemd/steam-uptodate.timer /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now steam-uptodate.timer
+tools/steam-uptodate.sh --check      # what Steam says right now
+```
+
+**The timer runs on UTC, with a net under it.** On 2026-11-01, when the clocks went back an hour, the server this template comes from ran none of its local-time timers between 06:00 and 07:00 UTC: systemd reads a local calendar in wall-clock time and took the repeated hour as already gone. A calendar in UTC has no repeated hour, and `OnUnitActiveSec=16min` makes up a run missed for any other reason. `tests/timers.sh` checks both with `systemd-analyze` on Toronto time that night. The script is one brace group read whole before it runs, so an edit to its file mid-run cannot change what the run does (`tests/read-whole.sh`).
+
 ## Updating
 
 The pin lives in the `x-images` block at the top of the compose file, as an interpolation default, so a `git pull` delivers the image this repository has tested. The tag is `master` because upstream publishes no version numbers: the digest is the version. When Valve ships an update the image is rebuilt, the daily freshness check goes red, and the pin moves deliberately. `./update.sh` does that on purpose: it moves to the latest release tag, refuses to cross a major unattended, and names any new required variable before anything has moved.
 
 ## Testing
 
-CI boots this one for real. The image is small enough for a runner: `docker compose up` with placeholder secrets, wait for the health check, then an A2S_INFO query on the published port from inside the container's namespace — the reply must carry the `0x49` header, which proves srcds is listening where the file says it binds, not merely alive. The three plugins are compiled with a pinned SourceMod compiler. `tests/e2e-healthcheck.sh` runs the health check in both directions against a fixture with no game download. All of it on every push, alongside shell and workflow linting, a Trivy scan of the pinned image, and a daily check that the pin still resolves to what upstream publishes.
+CI boots this one for real. The image is small enough for a runner: `docker compose up` with placeholder secrets, wait for the health check, then an A2S_INFO query on the published port from inside the container's namespace — the reply must carry the `0x49` header, which proves srcds is listening where the file says it binds, not merely alive. Then it asks Steam, with `tools/steam-uptodate.sh --check`, whether the version the server reports is current, and fails unless it is. The plant: the version before the current one written into `steam.inf`, which the check must call out of date and the timer's script must report as needing a newer image. `tests/steam-uptodate.sh` drives every branch of the script against stubbed answers, with four plants, one rule taken out each; `tests/read-whole.sh` and `tests/timers.sh` check the script and its timer. The three plugins are compiled with a pinned SourceMod compiler. `tests/e2e-healthcheck.sh` runs the health check in both directions against a fixture with no game download. All of it on every push, alongside shell and workflow linting, a Trivy scan of the pinned image, and a daily check that the pin still resolves to what upstream publishes.
 
 ---
 

@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_(no unreleased changes yet)_
+### Added
+
+- **CI asks Steam whether the booted server is current.** A2S proved the server listened; nothing asked whether anyone could join it. Steam enforces the version and answers that directly: `UpToDateCheck` takes the version the server reports. CI now fails unless Steam calls the server current, and a stale version written into `steam.inf` must turn the check red. On the machine this template comes from, Team Fortress 2 sat out of date for days while every check there was green, because none of them asked.
+- **`tools/steam-uptodate.sh` and a systemd timer, asking the same question every fifteen minutes on the host.** The game is baked into this image, so the script has nothing to update: when Steam stops accepting the version the image carries, it says so once, and fails every run until a newer image arrives in a template release. A silent server or Steam decides nothing, for up to six hours. Something new also goes to `STEAM_UPTODATE_NOTIFY` when it is set. The timer is on UTC with an `OnUnitActiveSec` net (`tests/timers.sh`), the script is one brace group read whole before it runs (`tests/read-whole.sh`), and `tests/steam-uptodate.sh` drives every branch against stubbed answers, with four plants, one rule taken out each.
 
 ## [1.2.1] - 2026-10-21
 
