@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.3.0] - 2026-11-01
+
 ### Added
 
 - **CI asks Steam whether the booted server is current.** A2S proved the server listened; nothing asked whether anyone could join it. Steam enforces the version and answers that directly: `UpToDateCheck` takes the version the server reports. CI now fails unless Steam calls the server current, and a stale version written into `steam.inf` must turn the check red. On the machine this template comes from, Team Fortress 2 sat out of date for days while every check there was green, because none of them asked.
 - **`tools/steam-uptodate.sh` and a systemd timer, asking the same question every fifteen minutes on the host.** The game is baked into this image, so the script has nothing to update: when Steam stops accepting the version the image carries, it says so once, and fails every run until a newer image arrives in a template release. A silent server or Steam decides nothing, for up to six hours. Something new also goes to `STEAM_UPTODATE_NOTIFY` when it is set. The timer is on UTC with an `OnUnitActiveSec` net (`tests/timers.sh`), the script is one brace group read whole before it runs (`tests/read-whole.sh`), and `tests/steam-uptodate.sh` drives every branch against stubbed answers, with four plants, one rule taken out each.
-
 ## [1.2.1] - 2026-10-21
 
 ### Fixed
@@ -67,7 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published port. The image is 3.3 GB compressed, which a runner can hold —
   the one Source server in this family for which that is true.
 
-[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.0.0...v1.1.0
