@@ -1,0 +1,16 @@
+[Unit]
+Description=Ask Steam whether the Left 4 Dead 2 server is current
+Documentation=https://github.com/heyvaldemar/l4d2-server-docker-compose#keeping-the-game-current
+
+[Service]
+Type=oneshot
+# Where this repository is checked out. The script finds the compose file and
+# keeps its state (.steam-uptodate*) there.
+WorkingDirectory=/opt/l4d2-server-docker-compose
+ExecStart=/opt/l4d2-server-docker-compose/tools/steam-uptodate.sh
+# BOUNDED, SO A HANG BECOMES A FAILURE. The game is baked into the image, so
+# a run is one query and never an update; five minutes is far above that.
+TimeoutStartSec=5m
+# To hear about it when Steam stops accepting the version the image carries,
+# give it a command that takes the message on stdin, for example:
+# Environment="STEAM_UPTODATE_NOTIFY=curl -fsS --data-binary @- https://ntfy.sh/<your-topic>"

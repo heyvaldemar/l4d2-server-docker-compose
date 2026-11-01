@@ -95,8 +95,9 @@ jobs:
           category: trivy-${{ matrix.name }}
 
   healthcheck:
-    name: The health check, in both directions
+    name: The health check, both ways, and the Steam check, against stubs
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -105,7 +106,7 @@ jobs:
         # Pinned, and the same image a maintainer runs locally: Ubuntu's
         # packaged shellcheck is a different version with different defaults.
         run: |
-          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 tests/e2e-healthcheck.sh
+          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 tests/*.sh tools/*.sh
 
       - name: Prove the exact match catches what a substring match misses
         # Assertions against a real container, with no game download: two
@@ -116,6 +117,15 @@ jobs:
         run: |
           chmod +x tests/e2e-healthcheck.sh
           ./tests/e2e-healthcheck.sh
+
+      - name: The Steam check, every branch, against stubbed answers
+        run: bash tests/steam-uptodate.sh
+
+      - name: Every script in tools/ is read whole before it runs
+        run: bash tests/read-whole.sh
+
+      - name: The timer keeps running the night the clocks go back
+        run: bash tests/timers.sh
 
       - name: The compose file parses with the shipped defaults
         run: |
@@ -199,6 +209,41 @@ jobs:
           echo "::error::the server never answered A2S_INFO on $ip:27015"
           docker logs "$cid" 2>&1 | tail -60
           exit 1
+
+      - name: Steam calls the server current
+        # A2S proves the server listens; it does not prove anyone can join.
+        # Steam enforces the version, and answers the question directly from
+        # the version the server reports: tools/steam-uptodate.sh --check, the
+        # script the timer runs (0 current, 1 behind, 3 no answer yet).
+        run: |
+          for _ in $(seq 1 20); do
+            rc=0; tools/steam-uptodate.sh --check || rc=$?
+            [ "$rc" = 3 ] || exit "$rc"
+            sleep 10
+          done
+          exit 3
+
+      - name: Plant - a stale version turns the check red
+        # The version before the current one, written where the server reads
+        # it: what this image will look like the day Valve ships an update.
+        # The check must call it out of date, and the timer's script must say
+        # that only a newer image can fix it.
+        run: |
+          forge='sed -i -E "s/^(ClientVersion|ServerVersion|PatchVersion)=.*/\1=2.2.4.2/" /server/left4dead2/steam.inf && grep -E "Version=" /server/left4dead2/steam.inf'
+          docker compose -f l4d2-server-docker-compose.yml -p l4d2 exec -T l4d2-server sh -c "$forge" \
+            || docker compose -f l4d2-server-docker-compose.yml -p l4d2 exec -T -u 0 l4d2-server sh -c "$forge"
+          docker compose -f l4d2-server-docker-compose.yml -p l4d2 restart l4d2-server
+          for _ in $(seq 1 30); do
+            rc=0; tools/steam-uptodate.sh --check || rc=$?
+            [ "$rc" = 3 ] || break
+            sleep 10
+          done
+          [ "$rc" = 1 ] || { echo "::error::the stale server was not called out of date (exit $rc)"; exit 1; }
+          rc=0; out="$(tools/steam-uptodate.sh)" || rc=$?
+          echo "$out"
+          if [ "$rc" != 1 ] || [[ $out != *"baked into the image"* ]]; then
+            echo "::error::the timer's script did not say the image needs replacing (exit $rc)"; exit 1
+          fi
 
       - name: Stop
         if: always()
