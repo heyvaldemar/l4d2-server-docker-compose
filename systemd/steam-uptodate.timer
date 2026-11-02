@@ -6,8 +6,8 @@ Description=Ask Steam whether the Left 4 Dead 2 server is current
 # is behind turns every player on the current client away until it is
 # updated. The minute is offset per template (tf2 :00, l4d2 :03, cs2 :06,
 # cs2-classic :09) so servers on one host do not all ask at once.
-# In UTC. On 2026-11-01, when the clocks went back, the server this template
-# comes from ran none of its local-time timers for an hour: systemd took the
+# In UTC. The night the clocks went back, the server this template comes
+# from ran none of its local-time timers for an hour: systemd took the
 # repeated hour as already gone. UTC has no repeated hour.
 OnCalendar=*:3/15 UTC
 # A net under the calendar: sixteen minutes after the last run, so a missed

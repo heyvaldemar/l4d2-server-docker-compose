@@ -78,7 +78,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now steam-uptodate.timer
 tools/steam-uptodate.sh --check      # what Steam says right now
 ```
 
-**The timer runs on UTC, with a net under it.** On 2026-11-01, when the clocks went back an hour, the server this template comes from ran none of its local-time timers between 06:00 and 07:00 UTC: systemd reads a local calendar in wall-clock time and took the repeated hour as already gone. A calendar in UTC has no repeated hour, and `OnUnitActiveSec=16min` makes up a run missed for any other reason. `tests/timers.sh` checks both with `systemd-analyze` on Toronto time that night. The script is one brace group read whole before it runs, so an edit to its file mid-run cannot change what the run does (`tests/read-whole.sh`).
+**The timer runs on UTC, with a net under it.** The night the clocks went back an hour, the server this template comes from ran none of its local-time timers for that hour: systemd reads a local calendar in wall-clock time and took the repeated hour as already gone. A calendar in UTC has no repeated hour, and `OnUnitActiveSec=16min` makes up a run missed for any other reason. `tests/timers.sh` checks both with `systemd-analyze` from one second before a fall-back (Berlin's, on 25 October 2026). The script is one brace group read whole before it runs, so an edit to its file mid-run cannot change what the run does (`tests/read-whole.sh`).
 
 ## Updating
 
