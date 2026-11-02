@@ -8,8 +8,9 @@
 # host lock.
 #
 #   branches  current; current again; behind with people on (said once);
-#             behind and empty -> updated, proven by Steam; an update Steam
-#             does not accept; three tries in a day; the game baked into
+#             behind and empty -> updated, proven by Steam, by a restart and
+#             by a one-shot service; an update Steam does not accept;
+#             three tries in a day; the game baked into
 #             the image (said once, exit 1 every run); the image updating on
 #             restart; A2S silent, tolerated and then not; Steam silent;
 #             another update on this host, by its lock and by its stamp;
@@ -106,7 +107,9 @@ run
   && pass "the next run, still 3 on: says nothing new" || fail "second run with people on: told $(told), $out"
 
 echo "=== behind, nobody on ==="
-for how in $(printf '%s\n' "$UPD" restart | sort -u); do
+# Every kind of update the script knows, whichever this server uses: a
+# restart, and a one-shot service run before the server starts.
+for how in $(printf '%s\n' "$UPD" restart game-update | sort -u); do
   fresh "$how"; answers "$OLD" "$OLD" "$NEW"; run
   if [ "$how" = restart ]; then did=$(asked " restart $SERVICE"); else did=$(( $(asked " stop $SERVICE") + $(asked " up -d $SERVICE") )); fi
   [ "$rc" = 0 ] && [[ $out == *"updated: version 10828683 -> 11191711, which Steam calls current"* ]] \
@@ -114,12 +117,10 @@ for how in $(printf '%s\n' "$UPD" restart | sort -u); do
     && [ ! -e "$CASE/repo/.steam-uptodate-state" ] && [ -s "$CASE/host.last" ] && [ "$(told)" = 1 ] \
     && pass "$how: empty and behind -> updated, and Steam's answer is the proof" || fail "$how update: exit $rc, $out"
 done
-if [ "$HOW" != restart ] && [ "$HOW" != image ]; then
-  fresh "$HOW"; answers "$OLD" "$NEW"; run
-  [[ $(tr '\n' '|' <"$CASE/docker.log") == *"stop $SERVICE"*"up -d $SERVICE"* ]] && [[ $out == *"($HOW: updated build 1 -> 2)"* ]] \
-    && pass "$HOW: the server is stopped before the one-shot runs, and the one-shot's last line is quoted" \
-    || fail "one-shot order: $(tr '\n' '|' <"$CASE/docker.log") / $out"
-fi
+fresh game-update; answers "$OLD" "$NEW"; run
+[[ $(tr '\n' '|' <"$CASE/docker.log") == *"stop $SERVICE"*"up -d $SERVICE"* ]] && [[ $out == *"(game-update: updated build 1 -> 2)"* ]] \
+  && pass "a one-shot: the server is stopped before the one-shot runs, and the one-shot's last line is quoted" \
+  || fail "one-shot order: $(tr '\n' '|' <"$CASE/docker.log") / $out"
 fresh restart; answers "$OLD"; run
 [ "$rc" = 1 ] && [[ $out == *"update did not take"* ]] && [[ $(state) == *warned* ]] \
   && [ "$(grep -c . "$CASE/repo/.steam-uptodate-updates")" = 1 ] \
