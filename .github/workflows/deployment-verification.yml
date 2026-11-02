@@ -223,6 +223,20 @@ jobs:
           done
           exit 3
 
+      - name: rcon answers, and refuses a wrong password
+        # The README's rcon command up to v1.3 named a program the image does
+        # not have. tools/rcon.sh is the one it names now: status must come
+        # back with the hostname line, and a wrong password must be refused.
+        run: |
+          out="$(tools/rcon.sh status)"; printf '%s\n' "$out" | head -5
+          grep -q '^hostname' <<<"$out" || { echo "::error::status did not return the hostname line"; exit 1; }
+          cp .env .env.good
+          sed -i 's/^L4D2_SERVER_RCON_PASSWORD=.*/L4D2_SERVER_RCON_PASSWORD=not-the-password/' .env
+          rc=0; tools/rcon.sh status || rc=$?
+          mv .env.good .env
+          [ "$rc" = 2 ] || { echo "::error::a wrong password was not refused (exit $rc)"; exit 1; }
+          echo "a wrong password: refused, exit 2"
+
       - name: Plant - a stale version turns the check red
         # The version before the current one, written where the server reads
         # it: what this image will look like the day Valve ships an update.

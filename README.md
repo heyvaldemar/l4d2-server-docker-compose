@@ -57,10 +57,13 @@ If you run this at home and want nothing listening on your router, put the game 
 ## Administration
 
 ```bash
-docker compose -p l4d2 exec l4d2-server rcon status
-docker compose -p l4d2 exec l4d2-server rcon changelevel c2m1_highway
-docker compose -p l4d2 exec l4d2-server rcon sm_cyclenext
+# rcon, using the password from .env
+tools/rcon.sh status
+tools/rcon.sh changelevel c2m1_highway
+tools/rcon.sh sm_cyclenext
 ```
+
+Up to v1.3 this said `docker compose -p l4d2 exec l4d2-server rcon status`. The image has no rcon program, so that command could only fail. `tools/rcon.sh` speaks the rcon protocol from the server's network namespace, with python from the same pinned image the Steam check uses (this image carries none), takes the password from `.env` on stdin rather than the command line where `ps` would show it, and CI checks `status` against the real server and a wrong password refused.
 
 ## Keeping the game current
 
