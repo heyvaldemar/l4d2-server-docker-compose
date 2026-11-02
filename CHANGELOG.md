@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.3.3] - 2026-11-01
+
 ### Changed
 
 - **The fall-back night is shown on a neutral zone.** `tests/timers.sh` reads Berlin's fall-back on 25 October 2026; any zone with a fall-back shows the same skip, and the test still fails on a calendar without `UTC`. The README and the timer's comment no longer name the night by date and hour.
-
 ## [1.3.2] - 2026-11-01
 
 ### Fixed
@@ -82,7 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published port. The image is 3.3 GB compressed, which a runner can hold —
   the one Source server in this family for which that is true.
 
-[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.3...HEAD
+[1.3.3]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.2.1...v1.3.0
