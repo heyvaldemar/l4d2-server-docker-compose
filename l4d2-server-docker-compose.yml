@@ -41,7 +41,31 @@ services:
       # rcon is TCP on the same number.
       - "${L4D2_SERVER_PORT:-27015}:${L4D2_SERVER_PORT:-27015}/tcp"
     # The image's entrypoint starts srcds_linux and appends whatever is here.
+    # THE RCON PASSWORD GOES IN A FILE, NOT ON THE COMMAND LINE. As
+    # +rcon_password it sat in srcds's arguments for as long as the server ran,
+    # and every user on the host reads a process's arguments with ps. This
+    # writes it with the shell's own printf into cfg/secrets/rcon.cfg, on a
+    # tmpfs so it never touches a disk, then hands over to the image's own
+    # entrypoint; the command below runs +exec secrets/rcon.cfg. A value with a
+    # double quote, which a Source config line cannot carry, stops the start.
+    entrypoint:
+      - dumb-init
+      - --
+      - /bin/sh
+      - -c
+      - |
+        case "$$L4D2_SERVER_RCON_PASSWORD" in
+          "") echo "L4D2_SERVER_RCON_PASSWORD is not set" >&2; exit 1 ;;
+          *\"*) echo "L4D2_SERVER_RCON_PASSWORD holds a double quote, which a Source config line cannot carry" >&2; exit 1 ;;
+        esac
+        umask 077
+        printf "rcon_password \"%s\"\n" "$$L4D2_SERVER_RCON_PASSWORD" > left4dead2/cfg/secrets/rcon.cfg || exit 1
+        exec ./docker-entrypoint.sh "$$@"
+      - start-server
+    tmpfs:
+      - /server/left4dead2/cfg/secrets:mode=1777,size=64k
     environment:
+      L4D2_SERVER_RCON_PASSWORD: ${L4D2_SERVER_RCON_PASSWORD:?set in .env - see .env.example for generation command}
       # THE GAME GETS THE HOUSEHOLD CLOCK TOO, not only whatever sidecar
       # sits beside it. Every timestamp this server writes — bans, joins,
       # the crash it leaves behind — is read next to a log line from
@@ -58,8 +82,9 @@ services:
       - server.cfg
       - +sv_gametypes
       - "${L4D2_SERVER_GAME_TYPES:-coop}"
-      - +rcon_password
-      - "${L4D2_SERVER_RCON_PASSWORD:?set in .env - see .env.example for generation command}"
+      # The RCON password, from the file the entrypoint above writes.
+      - +exec
+      - secrets/rcon.cfg
     volumes:
       - ./server.cfg:/server/left4dead2/cfg/server.cfg:ro
       # ADDONS LIVE OUTSIDE THE CONTAINER OR THEY DO NOT LIVE. The game sits in

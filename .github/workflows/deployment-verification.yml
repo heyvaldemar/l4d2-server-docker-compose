@@ -150,6 +150,9 @@ jobs:
       - name: Start the stack with placeholder secrets
         run: |
           sed -E 's/^([A-Z0-9_]+)=$/\1=ci-placeholder/' .env.example > .env
+          # A random password, so the command-line check below looks for a
+          # value nothing else on the runner could hold.
+          sed -i "s/^L4D2_SERVER_RCON_PASSWORD=.*/L4D2_SERVER_RCON_PASSWORD=$(openssl rand -hex 16)/" .env
           docker compose -f l4d2-server-docker-compose.yml -p l4d2 up -d
 
       - name: Wait for the health check to go green
@@ -222,6 +225,27 @@ jobs:
             sleep 10
           done
           exit 3
+
+      - name: The RCON password is on no command line
+        # srcds kept it in its arguments for as long as it ran, where every
+        # user on the host reads it with ps; the entrypoint writes it into
+        # cfg/secrets/rcon.cfg instead. Every command line on the runner and in
+        # the container is read, compared through a file, so it is never printed.
+        run: |
+          vals="$(mktemp)"; chmod 600 "$vals"
+          sed -n 's/^L4D2_SERVER_RCON_PASSWORD=//p' .env > "$vals"
+          [ -s "$vals" ] || { echo "::error::could not read the password from .env"; exit 1; }
+          srcds="$(ps -eo comm=,args= | awk '$1 ~ /^srcds/ { $1 = ""; sub(/^ /, ""); print }')"
+          # shellcheck disable=SC2009  # every command line on the runner, not one process
+          host=$(ps -eo args= | grep -cF -f "$vals" || true)
+          # shellcheck disable=SC2016  # expanded by the container's shell
+          ctr=$(docker compose -f l4d2-server-docker-compose.yml -p l4d2 exec -T l4d2-server sh -c 'for f in /proc/[0-9]*/cmdline; do tr "\000" " " < "$f" 2>/dev/null; echo; done' | grep -cF -f "$vals" || true)
+          rm -f "$vals"
+          [ -n "$srcds" ] || { echo "::error::no srcds process on the runner to read"; exit 1; }
+          echo "command lines carrying the password: $host on the runner, $ctr in the container"
+          [ "$host" = 0 ] && [ "$ctr" = 0 ] || { echo "::error::the password is on a command line"; exit 1; }
+          printf '%s\n' "$srcds" | sed 's/^/  srcds: /'
+          docker compose -f l4d2-server-docker-compose.yml -p l4d2 exec -T l4d2-server stat -c '%a %U %n' left4dead2/cfg/secrets/rcon.cfg
 
       - name: rcon answers, and refuses a wrong password
         # The README's rcon command up to v1.3 named a program the image does
