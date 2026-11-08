@@ -1,101 +1,76 @@
 #!/bin/bash
-# Does the health check notice when the GAME dies and the wrapper does not?
+# Does the health check go by the game's own answer, run in the pinned image?
 #
-# This image runs `srcds_linux` directly under `bash -c`, with no
-# `srcds_run` between them, so the wrapper is `bash` and a substring
-# check does not lie here the way it does for the Laclede's LAN images.
-# The exact form is kept anyway: the next image update may add one.
+# tools/healthcheck.sh sends A2S_INFO, the engine's server query, to the game
+# port and is healthy only on the engine's reply. Here it runs in the image
+# the compose file pins, so bash, timeout, head, od and tr are proven to be
+# there, against a stand-in that speaks just enough A2S
+# (tests/fixtures/fake-a2s.py), in the stand-in's network namespace:
 #
-# Docker does not restart an unhealthy container by itself, so a check that
-# stays green with the game dead is a check nobody else corrects.
+#   answers     bound to the interface address, as srcds binds it: healthy
+#   challenge   S2C_CHALLENGE first, the info reply only to a query carrying
+#               its bytes: healthy
+#   silent      a socket on the port that never answers: unhealthy, and the
+#               check is over within the 10 seconds Docker gives it
+#   no socket   nothing bound to the port, which is a process that stands
+#               without a network, as Black Mesa's did on Docker 29.4.2:
+#               unhealthy
 #
-# No game download involved: two processes with the right names are enough,
-# and the check reads /proc, not the game.
+# The stand-in is not a server. The real one is the boot job in CI, which
+# also stops the game process and requires the check to go red.
+# shellcheck disable=SC2015   # pass and fail always exit 0, so "A && pass || fail" is if-then-else here
 set -uo pipefail
+cd "$(dirname "$0")/.." || exit 1
 
-RUN="l4d2-server-hc-$$"
 PASSED=0; FAILED=0
-cleanup() { docker rm -f "$RUN" >/dev/null 2>&1; }
-trap cleanup EXIT
-
 pass() { echo "  PASS: $1"; PASSED=$((PASSED+1)); }
 fail() { echo "  FAIL: $1"; FAILED=$((FAILED+1)); }
+IMAGE=$(grep -m1 -oE '\$\{L4D2_SERVER_IMAGE_TAG:-.*' l4d2-server-docker-compose.yml | sed -E -e ':a' -e 's/\$\{[A-Z0-9_]+:-([^{}]*)\}/\1/' -e 'ta')
+PY=python:3.13-alpine@sha256:7984cf56ceaddebe4fefeb75d64000b9f45d8b77b11a09b24524da6cdc3af0c8
+NET="l4d2-hc-net-$$"
+cleanup() { docker rm -f "$NET" >/dev/null 2>&1; }
+trap cleanup EXIT
 
-EXACT='grep -qsx srcds_linux /proc/[0-9]*/comm'
+standin() {  # mode bind: a fresh stand-in, waited for until it is bound
+  docker rm -f "$NET" >/dev/null 2>&1
+  docker run -d --name "$NET" -v "$PWD/tests/fixtures/fake-a2s.py:/fake-a2s.py:ro" "$PY" \
+    python3 -u /fake-a2s.py "$1" 27015 "$2" >/dev/null || return 1
+  for _ in $(seq 1 40); do
+    docker logs "$NET" 2>&1 | grep -q '^bound' && return 0
+    sleep 0.25
+  done
+  return 1
+}
+empty() {  # a namespace with nothing bound to the port
+  docker rm -f "$NET" >/dev/null 2>&1
+  docker run -d --name "$NET" "$PY" sleep 300 >/dev/null
+}
+check() {  # run the health check in the pinned image, in the stand-in's namespace: sets rc, out, secs
+  out=$(docker run --rm --platform linux/amd64 --network "container:$NET" --entrypoint bash \
+    -v "$PWD/tools/healthcheck.sh:/healthcheck.sh:ro" "$IMAGE" \
+    -c 's=$SECONDS; bash /healthcheck.sh 27015; rc=$?; echo "secs=$((SECONDS - s))"; exit $rc' 2>&1); rc=$?
+  secs=$(sed -n 's/^secs=//p' <<<"$out"); out=$(grep -v '^secs=' <<<"$out")
+}
 
-echo "=== the health check, in both directions ==="
+echo "=== the health check, in the pinned image, against a stand-in ==="
 echo
 
-docker rm -f "$RUN" >/dev/null 2>&1
-# debian, not alpine: busybox dispatches on argv[0], so a copy of its sleep
-# named srcds_linux is not an applet it knows and exits immediately. A real standalone
-# binary takes the name it is invoked under, which is what /proc/N/comm reads.
-docker run -d --name "$RUN" debian:stable-slim sh -c '
-  g=srcds; g="${g}_linux"
-  cp /bin/sleep "/tmp/$g"
-  cp /bin/sleep /tmp/bash
-  "/tmp/$g" 3600 &
-  /tmp/bash 3600 &
-  wait' >/dev/null 2>&1 || { echo "cannot start the fixture container"; exit 1; }
+standin answers iface || { fail "the stand-in never bound its port"; echo; echo "passed: $PASSED   failed: $FAILED"; exit 1; }
+check
+[ "$rc" = 0 ] && grep -q "^healthy:" <<<"$out" && pass "an answer on the interface address: healthy ($out)" || fail "answers: exit $rc, $out"
 
-# Both processes have to exist before anything is asserted, or a pass below
-# would only mean the container was slow.
-ready=false
-for _ in $(seq 1 40); do
-  if docker exec "$RUN" sh -c "$EXACT" 2>/dev/null; then ready=true; break; fi
-  sleep 0.5
-done
-if [ "$ready" = true ]; then
-  pass "with the game running, the exact check is green"
-else
-  fail "the fixture never came up; nothing below would mean anything"
-  docker logs "$RUN" 2>&1 | tail -5 | sed 's/^/        /'
-  echo; echo "passed: $PASSED   failed: $FAILED"; exit 1
-fi
+standin challenge iface || fail "the challenge stand-in never bound its port"
+check
+[ "$rc" = 0 ] && pass "a challenge first, then the answer: healthy" || fail "challenge: exit $rc, $out"
 
-# Both names are present, so the loose form is green too. It has to be, or the
-# comparison below proves nothing.
+standin silent iface || fail "the silent stand-in never bound its port"
+check
+[ "$rc" = 1 ] && [[ $out == *"no A2S_INFO reply"* ]] && pass "a socket that never answers: unhealthy" || fail "silent: exit $rc, $out"
+[ -n "$secs" ] && [ "$secs" -le 9 ] && pass "and the check was over in ${secs}s, inside Docker's 10" || fail "silent: the check took ${secs:-?}s"
 
-# THE CASE THIS EXISTS FOR: kill the game, leave the wrapper.
-#
-# /proc rather than pgrep: debian:stable-slim ships no procps, and a missing
-# command exits non-zero, which a naive check reads as "the process is gone".
-# The first version of this file did exactly that and reported a kill that
-# never happened - the same shape of silent no-op the health check itself is
-# written to avoid.
-docker exec "$RUN" sh -c 'for p in /proc/[0-9]*; do
-  [ "$(tr "\0" "\n" < "$p/cmdline" 2>/dev/null | head -1)" = "/tmp/srcds_linux" ] && kill -9 "${p##*/}" 2>/dev/null
-done; true' >/dev/null 2>&1
-# Waiting on something OTHER than the assertion. Waiting until $EXACT fails and
-# then asserting that $EXACT fails proves nothing at all; this reads the comm
-# files itself and counts.
-gone=false
-for _ in $(seq 1 20); do
-  n="$(docker exec "$RUN" sh -c 'c=0; for p in /proc/[0-9]*; do
-        [ "$(tr "\0" "\n" < "$p/cmdline" 2>/dev/null | head -1)" = "/tmp/srcds_linux" ] && c=$((c+1)); done; echo "$c"' 2>/dev/null)"
-  if [ "${n:-1}" = "0" ]; then gone=true; break; fi
-  sleep 0.5
-done
-if [ "$gone" != true ]; then
-  fail "could not kill the game process, so the assertion below is meaningless"
-else
-  if docker exec "$RUN" sh -c "$EXACT" 2>/dev/null; then
-    fail "the exact check stayed green with the game dead"
-  else
-    pass "with the game dead, the exact check goes red"
-  fi
-
-  # No wrapper here shares text with the game name, so a substring form would
-  # go red too - there is no lie to demonstrate, and this file does not pretend
-  # there is one.
-fi
-
-# And the wrapper is genuinely still there, so "green" above was about it.
-if docker exec "$RUN" sh -c 'for p in /proc/[0-9]*; do [ "$(tr "\0" "\n" < "$p/cmdline" 2>/dev/null | head -1)" = "/tmp/bash" ] && exit 0; done; exit 1' 2>/dev/null; then
-  pass "the wrapper is still running, so the check went red for the right reason"
-else
-  fail "the wrapper died too, so the scenario was not the one described"
-fi
+empty
+check
+[ "$rc" = 1 ] && [[ $out == *"nothing is bound"* ]] && pass "no socket on the port: unhealthy" || fail "no socket: exit $rc, $out"
 
 echo
 echo "passed: $PASSED   failed: $FAILED"

@@ -85,6 +85,8 @@ services:
       - +sv_gametypes
       - "${L4D2_SERVER_GAME_TYPES:-coop}"
     volumes:
+      # The health check: A2S_INFO to the game port (see healthcheck: below).
+      - ./tools/healthcheck.sh:/healthcheck.sh:ro
       - ./server.cfg:/server/left4dead2/cfg/server.cfg:ro
       # ADDONS LIVE OUTSIDE THE CONTAINER OR THEY DO NOT LIVE. The game sits in
       # the image's writable layer, so every recreate — an image update, a
@@ -104,11 +106,20 @@ services:
       # the image would put its own version back on the next update.
       - ./mapcycle.txt:/server/left4dead2/mapcycle.txt:ro
     healthcheck:
-      # EXACT MATCH. This image runs srcds_linux directly under its entrypoint,
-      # with no srcds_run wrapper between them, so a substring check would not
-      # lie here today. The anchored form is kept so it cannot start to when the
-      # image changes. tests/e2e-healthcheck.sh runs it against a real container.
-      test: ["CMD-SHELL", "grep -qsx srcds_linux /proc/[0-9]*/comm"]
+      # THE GAME'S OWN ANSWER, NOT ITS PROCESS. tools/healthcheck.sh sends
+      # A2S_INFO, the query every server browser sends, to the game port and is
+      # healthy only on the engine's reply. Up to v1.3.4 this looked for
+      # srcds_linux in /proc: a hung or stopped game keeps its process, and on
+      # Docker Engine 29.4.2 Black Mesa's 32-bit srcds, built like this one,
+      # ran with no socket at all and stayed healthy. The log is not read
+      # either: an empty server writes nothing for hours and still answers. A
+      # map change silences it for seconds; the check tries twice and Docker
+      # allows three misses at this interval. Each check ends within 9 seconds.
+      # It asks from inside the container: it does not prove the port is
+      # published on the host or open in a firewall.
+      # CI runs it in the pinned image against a stand-in, and stops the real
+      # game's process and requires it to go red.
+      test: ["CMD", "bash", "/healthcheck.sh", "${L4D2_SERVER_PORT:-27015}"]
       interval: 60s
       timeout: 10s
       retries: 3
