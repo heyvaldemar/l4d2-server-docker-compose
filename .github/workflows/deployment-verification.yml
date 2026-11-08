@@ -147,6 +147,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Docker 29.4.2 answers socketcall with ENOSYS; give its daemon the profile 29.4.3 ships
+        # Docker Engine 29.4.2, and that release alone, blocks the 32-bit
+        # socketcall(2) system call in its default seccomp profile
+        # (moby/moby#52506). Left 4 Dead 2's srcds, a 32-bit program, makes
+        # every socket through it, so on 29.4.2 it dies on start, with Steam and
+        # the network both up. 29.4.3 reverted the rule; the ubuntu-26.04 runner
+        # image still ships 29.4.2. On that version, and only there, the daemon
+        # gets the default profile 29.4.3 ships (moby/profiles seccomp v0.2.3),
+        # pinned by commit and checksum. Measured: tf2-server-docker-compose run
+        # 42496129688.
+        run: |
+          v="$(docker version --format '{{.Server.Version}}')"
+          if [ "$v" != 29.4.2 ]; then echo "Docker $v: its own profile allows socketcall"; exit 0; fi
+          sudo curl -fsSL -o /etc/docker/seccomp-29.4.3.json \
+            https://raw.githubusercontent.com/moby/profiles/836ae4d37ef2ec995c77c99fc55f5b5f3af3a897/seccomp/default.json
+          echo "536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74  /etc/docker/seccomp-29.4.3.json" | sha256sum -c -
+          f=/etc/docker/daemon.json
+          [ -s "$f" ] || echo '{}' | sudo tee "$f" >/dev/null
+          sudo jq '. + {"seccomp-profile": "/etc/docker/seccomp-29.4.3.json"}' "$f" | sudo tee "$f.new" >/dev/null
+          sudo mv "$f.new" "$f"
+          sudo systemctl restart docker
+          docker info --format '{{.SecurityOptions}}'
+
       - name: Start the stack with placeholder secrets
         run: |
           sed -E 's/^([A-Z0-9_]+)=$/\1=ci-placeholder/' .env.example > .env
