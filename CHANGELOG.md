@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.4.0] - 2026-11-08
+
 ### Changed
 
 - **The health check asks the game, not its process.** It looked for `srcds_linux` in `/proc`, which a hung or stopped game keeps, and which Black Mesa's 32-bit server kept on Docker Engine 29.4.2 with no socket at all while it reported healthy. `tools/healthcheck.sh`, mounted read-only, now sends A2S_INFO to the game port at the address it answers on (the one it is bound to, or the container's own when it binds 0.0.0.0, as Left 4 Dead 2 does) and is healthy only on the engine's reply; it handles the challenge Source servers may answer with first, tries twice for a map change, and ends within 7 seconds. It asks from inside the container, so it does not prove the port is published on the host or open in a firewall; the README says so. CI runs it in the pinned image against a stand-in (answers, challenge, silent, no socket), and on the real server changes the map and needs it answering again, then stops the game process with SIGSTOP and needs it red while the old check stays green.
 - **The Docker Engine 29.4.2 note links GitHub's runner-image issue and its fix.** [actions/runner-images#14790](https://github.com/actions/runner-images/issues/14790) is the ubuntu-26.04 image shipping that release; [actions/runner-images#15205](https://github.com/actions/runner-images/pull/15205) moves it to 29.7.2. Documentation only.
-
 ## [1.3.4] - 2026-11-08
 
 ### Security
@@ -101,7 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published port. The image is 3.3 GB compressed, which a runner can hold —
   the one Source server in this family for which that is true.
 
-[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.4...HEAD
+[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.4...v1.4.0
 [1.3.4]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.1...v1.3.2
