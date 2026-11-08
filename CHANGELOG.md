@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.3.4] - 2026-11-08
+
 ### Security
 
 - **The RCON password is no longer on the server's command line.** It was passed to srcds as `+rcon_password <password>`, so it sat in its arguments for as long as the server ran, where every user on the host reads it with `ps` (`/proc/<pid>/cmdline` is world-readable, and the host sees every container's processes). The compose file now hands it to the container as an environment variable; a short entrypoint writes it with the shell's own `printf` into `cfg/secrets/rcon.cfg`, on a tmpfs so it never touches a disk, mode 600, then hands over to the image's own entrypoint, and the command line carries `+exec secrets/rcon.cfg` in its place. A password holding a double quote, which a Source config line cannot carry, stops the start with a message instead of being cut. CI starts the real image with a random password, reads every command line on the runner and in the container and requires it on none; RCON still answers with the password and refuses a wrong one.
@@ -18,7 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **The README names Docker Engine 29.4.2.** That release alone stops this server: Left 4 Dead 2's srcds is 32-bit and makes every socket with the system call it blocks: upgrade to 29.4.3 or later, which reverted the rule, or point the daemon's `seccomp-profile` at the profile 29.4.3 ships. Ubuntu 26.04's own `docker.io` (27.5.1) never had it.
-
 ## [1.3.3] - 2026-11-01
 
 ### Changed
@@ -95,7 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published port. The image is 3.3 GB compressed, which a runner can hold —
   the one Source server in this family for which that is true.
 
-[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.3...HEAD
+[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.4...HEAD
+[1.3.4]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.0...v1.3.1
