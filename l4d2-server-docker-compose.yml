@@ -46,8 +46,11 @@ services:
     # and every user on the host reads a process's arguments with ps. This
     # writes it with the shell's own printf into cfg/secrets/rcon.cfg, on a
     # tmpfs so it never touches a disk, then hands over to the image's own
-    # entrypoint; the command below runs +exec secrets/rcon.cfg. A value with a
-    # double quote, which a Source config line cannot carry, stops the start.
+    # entrypoint; server.cfg runs `exec secrets/rcon.cfg` on every map load.
+    # Not +exec on the command line: Left 4 Dead 2 drops an rcon_password set
+    # that early and refuses the right password (measured, see server.cfg). A
+    # value with a double quote, which a Source config line cannot carry,
+    # stops the start.
     entrypoint:
       - dumb-init
       - --
@@ -81,9 +84,6 @@ services:
       - server.cfg
       - +sv_gametypes
       - "${L4D2_SERVER_GAME_TYPES:-coop}"
-      # The RCON password, from the file the entrypoint above writes.
-      - +exec
-      - secrets/rcon.cfg
     volumes:
       - ./server.cfg:/server/left4dead2/cfg/server.cfg:ro
       # ADDONS LIVE OUTSIDE THE CONTAINER OR THEY DO NOT LIVE. The game sits in
