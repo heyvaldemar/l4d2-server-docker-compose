@@ -114,7 +114,7 @@ services:
       # ran with no socket at all and stayed healthy. The log is not read
       # either: an empty server writes nothing for hours and still answers. A
       # map change silences it for seconds; the check tries twice and Docker
-      # allows three misses at this interval. Each check ends within 9 seconds.
+      # allows three misses at this interval. Each check ends within 7 seconds.
       # It asks from inside the container: it does not prove the port is
       # published on the host or open in a firewall.
       # CI runs it in the pinned image against a stand-in, and stops the real

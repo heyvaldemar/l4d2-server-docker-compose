@@ -10,8 +10,12 @@
 #   answers     bound to the interface address, as srcds binds it: healthy
 #   challenge   S2C_CHALLENGE first, the info reply only to a query carrying
 #               its bytes: healthy
-#   silent      a socket on the port that never answers: unhealthy, and the
-#               check is over within the 10 seconds Docker gives it
+#   0.0.0.0     bound to every address and deaf to a query from 127.0.0.1,
+#               as Left 4 Dead 2 was in CI: healthy, asked at the
+#               container's own address
+#   silent      a socket on the port that never answers, on one address and
+#               on 0.0.0.0 (two to ask): unhealthy, and the check is over
+#               within 8 seconds, inside the 10 Docker gives it
 #   no socket   nothing bound to the port, which is a process that stands
 #               without a network, as Black Mesa's did on Docker 29.4.2:
 #               unhealthy
@@ -63,10 +67,18 @@ standin challenge iface || fail "the challenge stand-in never bound its port"
 check
 [ "$rc" = 0 ] && pass "a challenge first, then the answer: healthy" || fail "challenge: exit $rc, $out"
 
+standin noloop 0.0.0.0 || fail "the 0.0.0.0 stand-in never bound its port"
+check
+[ "$rc" = 0 ] && pass "bound to 0.0.0.0 and deaf to 127.0.0.1: healthy, asked at the container's address" || fail "0.0.0.0: exit $rc, $out"
+
 standin silent iface || fail "the silent stand-in never bound its port"
 check
 [ "$rc" = 1 ] && [[ $out == *"no A2S_INFO reply"* ]] && pass "a socket that never answers: unhealthy" || fail "silent: exit $rc, $out"
-[ -n "$secs" ] && [ "$secs" -le 9 ] && pass "and the check was over in ${secs}s, inside Docker's 10" || fail "silent: the check took ${secs:-?}s"
+[ -n "$secs" ] && [ "$secs" -le 8 ] && pass "and the check was over in ${secs}s, inside Docker's 10" || fail "silent: the check took ${secs:-?}s"
+
+standin silent 0.0.0.0 || fail "the silent 0.0.0.0 stand-in never bound its port"
+check
+[ "$rc" = 1 ] && [ -n "$secs" ] && [ "$secs" -le 8 ] && pass "silent on 0.0.0.0, two addresses asked: unhealthy in ${secs}s" || fail "silent 0.0.0.0: exit $rc in ${secs:-?}s, $out"
 
 empty
 check

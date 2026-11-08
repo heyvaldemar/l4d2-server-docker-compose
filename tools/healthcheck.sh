@@ -18,17 +18,20 @@
 # A MAP CHANGE stops the answers for the seconds the next map takes to load,
 # so one check tries twice, a second apart, and Docker's retries cover the
 # rest: three misses in a row at the compose file's interval. Every read
-# times out after 2 seconds, so a whole check ends within 9 seconds, inside
-# the 10 seconds Docker gives it.
+# times out after 1.5 seconds (a running server answers in milliseconds);
+# with two addresses to try, a silent server costs the whole check 7 seconds,
+# inside the 10 Docker gives it.
 #
 # THE CHALLENGE. Since 2020 Source servers may answer the first A2S_INFO with
 # S2C_CHALLENGE ('A' and four bytes); the query is then sent again with those
 # bytes appended, and only the info reply ('I') counts.
 #
-# THE ADDRESS IT IS BOUND TO. srcds binds its interface's address, not
-# 0.0.0.0, so 127.0.0.1 gets nothing. The address comes from /proc/net/udp:
-# every socket bound to the game port, 0.0.0.0 read as 127.0.0.1. No socket
-# there at all is unhealthy at once.
+# THE ADDRESS IT ANSWERS ON. The addresses come from /proc/net/udp, every
+# socket bound to the game port; no socket there at all is unhealthy at once.
+# Bound to one address, that address. Bound to 0.0.0.0 (Left 4 Dead 2), the
+# container's own address from /etc/hosts first, then 127.0.0.1: such a
+# server did not answer a query sent to 127.0.0.1 (CI, 2026-11-08), and the
+# query CI had always sent went to the container's address.
 #
 # INSIDE THE CONTAINER. This proves the server answers in its own network
 # namespace. It does not prove the port is published on the host, nor that a
@@ -49,9 +52,19 @@ want=$(printf '%04X' "$port")
 while read -r _ local _; do
   [[ $local == *:"$want" ]] || continue
   h=${local%%:*}
-  if [ "$h" = 00000000 ]; then a=127.0.0.1
-  else a=$(printf '%d.%d.%d.%d' "0x${h:6:2}" "0x${h:4:2}" "0x${h:2:2}" "0x${h:0:2}"); fi
-  [[ " ${addrs[*]-} " == *" $a "* ]] || addrs+=("$a")
+  if [ "$h" = 00000000 ]; then
+    cands=()
+    read -r me < /etc/hostname 2>/dev/null || me=
+    while read -r ip name _; do
+      [[ -n $me && $name == "$me" && $ip == *.*.*.* ]] && cands+=("$ip")
+    done < /etc/hosts
+    cands+=(127.0.0.1)
+  else
+    cands=("$(printf '%d.%d.%d.%d' "0x${h:6:2}" "0x${h:4:2}" "0x${h:2:2}" "0x${h:0:2}")")
+  fi
+  for a in "${cands[@]}"; do
+    [[ " ${addrs[*]-} " == *" $a "* ]] || addrs+=("$a")
+  done
 done < <(tail -n +2 /proc/net/udp)
 if [ "${#addrs[@]}" = 0 ]; then
   echo "unhealthy: nothing is bound to UDP port $port" >&2
@@ -59,10 +72,10 @@ if [ "${#addrs[@]}" = 0 ]; then
 fi
 
 ask() {  # address, a printf format of the request -> the reply's first 9 bytes, in hex
-  exec 3<>"/dev/udp/$1/$port" 2>/dev/null || return 0
+  { exec 3<>"/dev/udp/$1/$port"; } 2>/dev/null || return 0
   # shellcheck disable=SC2059   # the request is a printf format on purpose: \xHH escapes
   printf "$2" >&3
-  timeout 2 head -c 9 <&3 | od -An -v -tx1 | tr -d ' \n'
+  timeout 1.5 head -c 9 <&3 | od -An -v -tx1 | tr -d ' \n'
   exec 3>&-
 }
 
