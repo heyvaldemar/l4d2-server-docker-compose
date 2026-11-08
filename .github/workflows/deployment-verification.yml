@@ -180,6 +180,12 @@ jobs:
           done
           echo "::error::the server never reported healthy"
           docker compose -f l4d2-server-docker-compose.yml -p l4d2 logs --tail 80
+          echo "--- the health check's own words, last runs"
+          docker inspect "$cid" --format '{{range .State.Health.Log}}exit {{.ExitCode}}: {{.Output}}{{end}}' | tail -c 2000
+          echo "--- UDP sockets in the container"
+          docker exec "$cid" cat /proc/net/udp
+          echo "--- the check, traced"
+          docker exec "$cid" bash -x /healthcheck.sh 27015 2>&1 | tail -40
           exit 1
 
       - name: The health check goes by the game's answer, in the pinned image
