@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.5.1] - 2026-11-14
+
 ### Fixed
 
 - **A kill for memory is named even when Docker stores its oom event late.** On a GitHub runner (Docker 29.4.2) the oom event of 1 kill in 20 was not there when the die event was, and was ten seconds later ([run 43623563645](https://github.com/heyvaldemar/l4d2-server-docker-compose/actions/runs/43623563645)), so the timer called a kill for memory a plain SIGKILL. A 137 with no oom event yet is now read again, for up to ten seconds: twenty kills in a row, twenty named, one of them read again ([run 43624152790](https://github.com/heyvaldemar/l4d2-server-docker-compose/actions/runs/43624152790)).
@@ -126,7 +130,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published port. The image is 3.3 GB compressed, which a runner can hold —
   the one Source server in this family for which that is true.
 
-[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.4...v1.4.0
 [1.3.4]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.3...v1.3.4
