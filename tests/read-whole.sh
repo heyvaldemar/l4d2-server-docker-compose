@@ -45,7 +45,7 @@ echo
 # A copy of the script, a docker that takes two seconds to say the server is
 # running, and Steam's answer supplied, so the run ends in "current".
 mkdir -p "$T/tools" "$T/bin"
-printf '#!/bin/sh\nsleep 2\ncase "$*" in *RestartCount*) echo "/srv-1 0123456789ab 0 2026-11-14T00:00:00Z 2026-11-14T00:00:00Z" ;; *) echo 0123456789ab ;; esac\n' >"$T/bin/docker"
+printf '#!/bin/sh\nsleep 2\ncase "$*" in *RestartCount*) echo "/game-server 0123456789ab 0 2026-11-14T00:00:00Z 2026-11-14T00:00:00Z" ;; *) echo 0123456789ab ;; esac\n' >"$T/bin/docker"
 printf '#!/bin/sh\necho 11191711 0 1 -\n' >"$T/bin/probe"
 cp tools/steam-uptodate.sh "$T/tools/wrapped.sh"
 # The same script without its braces: what a script is without them.

@@ -50,7 +50,7 @@ case " $* " in
   *" logs --until "*) cat "$CASE/crashlog" 2>/dev/null ;;
   *" logs "*) echo "${HOW_UNDER_TEST}: updated build 1 -> 2" ;;
   *RestartCount*) [ -e "$CASE/inspect-fails" ] && exit 1
-                  echo "/srv-1 $(cat "$CASE/restarts" 2>/dev/null || echo "c1 0") 2026-11-14T08:12:31Z 2026-11-14T08:12:40Z" ;;
+                  echo "/game-server $(cat "$CASE/restarts" 2>/dev/null || echo "c1 0") 2026-11-14T08:12:31Z 2026-11-14T08:12:40Z" ;;
   *" events "*) if [ -n "${OOM:-}" ]; then printf 'oom \ndie 137\n'; else echo "die 139"; fi ;;
   *" inspect "*) echo "172.18.0.2 " ;;
   *" restart "*) echo "c1 0" >"$CASE/restarts" ;;
@@ -192,7 +192,7 @@ fresh "$HOW"; answers "$OLD"; ln -s /etc/passwd "$CASE/repo/.steam-uptodate-stat
 echo "=== restarts Docker did, which the health check cannot see ==="
 rst() { cat "$CASE/repo/.steam-uptodate-restarts" 2>/dev/null; }
 fresh "$HOW"; answers "$NEW"; echo "c1 0" >"$CASE/restarts"; run
-[ "$rc" = 0 ] && [[ $(rst) == "/srv-1 c1 0 "* ]] && [ "$(told)" = 0 ] \
+[ "$rc" = 0 ] && [[ $(rst) == "/game-server c1 0 "* ]] && [ "$(told)" = 0 ] \
   && pass "the first run writes down name, container and count, and says nothing" || fail "restart baseline: exit $rc, $out"
 echo "c1 2" >"$CASE/restarts"
 printf '%s\n' 'map de_dust2 loaded' 'FATAL ERROR: Ran out of networkable entities +sv_setsteamaccount 0123456789ABCDEF0123456789ABCDEF' >"$CASE/crashlog"; run
@@ -201,13 +201,13 @@ printf '%s\n' 'map de_dust2 loaded' 'FATAL ERROR: Ran out of networkable entitie
 run
 [ "$rc" = 0 ] && [ "$(told)" = 1 ] && pass "the next run, nothing new: says nothing" || fail "after the restarts: exit $rc, $out"
 echo "c1 0" >"$CASE/restarts"; run
-[ "$rc" = 0 ] && [ "$(told)" = 1 ] && [[ $(rst) == "/srv-1 c1 0 "* ]] \
+[ "$rc" = 0 ] && [ "$(told)" = 1 ] && [[ $(rst) == "/game-server c1 0 "* ]] \
   && pass "the count back at 0 (a restart by hand): the new starting point, nothing said" || fail "count reset: exit $rc, $out"
 echo "c1 1" >"$CASE/restarts"; rm -f "$CASE/crashlog"; run
 [ "$rc" = 1 ] && [[ $out == *"restarted 1 time since"*"(3 in 24 h)"* ]] && [ "$(told)" = 2 ] \
   && pass "a third restart in 24 hours: exit 1" || fail "the limit: exit $rc, $out"
 echo "c2 0" >"$CASE/restarts"; run
-[ "$rc" = 0 ] && [[ $(rst) == "/srv-1 c2 0 "* ]] && pass "a new container (recreated): counted afresh, nothing said" || fail "new container: exit $rc, $out"
+[ "$rc" = 0 ] && [[ $(rst) == "/game-server c2 0 "* ]] && pass "a new container (recreated): counted afresh, nothing said" || fail "new container: exit $rc, $out"
 fresh "$HOW"; answers "$NEW"; echo "c1 0" >"$CASE/restarts"; run; echo "c1 1" >"$CASE/restarts"; OOM=true run
 [[ $out == *"restarted 1 time since"*"; killed for memory (oom event, exit 137 (SIGKILL))"* ]] && pass "an oom event: killed for memory, exit 137 named" || fail "OOM: $out"
 fresh "$HOW"; answers "$NEW"; echo "c1 0" >"$CASE/restarts"; run; touch "$CASE/inspect-fails"; before=$(rst); run
@@ -215,7 +215,7 @@ fresh "$HOW"; answers "$NEW"; echo "c1 0" >"$CASE/restarts"; run; touch "$CASE/i
   && pass "an inspect that fails: exit 1, the state untouched" || fail "inspect fails: exit $rc, $out"
 fresh restart; answers "$OLD" "$OLD" "$NEW"; echo "c1 2" >"$CASE/restarts"; run; answers "$OLD" "$OLD" "$NEW"
 printf '%s\n' "$(( $(date +%s) - 7200 ))" >"$CASE/repo/.steam-uptodate-updates"; run; r1=$rc; answers "$NEW"; run
-[ "$rc" = 0 ] && [ "$(told)" -le 1 ] && [[ $(rst) == "/srv-1 c1 0 "* ]] \
+[ "$rc" = 0 ] && [ "$(told)" -le 1 ] && [[ $(rst) == "/game-server c1 0 "* ]] \
   && pass "the script's own update restart sets the count to 0: no alarm after it" || fail "own restart: exits $r1 $rc, told $(told), $out"
 fresh "$HOW"; answers "$NEW"; echo "c1 0" >"$CASE/restarts"; run; echo "c1 1" >"$CASE/restarts"; run --check
 [ "$rc" = 0 ] && pass "--check says only what Steam says" || fail "--check with a restart: exit $rc, $out"
