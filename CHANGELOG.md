@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [1.5.0] - 2026-11-14
+
 ### Added
 
 - **A crash is reported by the timer.** The health check runs inside the container, and after a crash Docker starts it again with a fresh game that answers: green throughout, and nothing else says the server went down. `tools/steam-uptodate.sh` now writes down Docker's restart count for the server and when the game process last started, on every run. A restart Docker did is said once, with the exit code (the signal named) and the reason when it can tell, from Docker's `oom` event or the last crash line of the log; a restarted container's own state says exit 0 and not killed for memory again, so only Docker's events keep them. A game that died and came back inside its container, as Valve's `srcds_run` brings one back, is said the same way. Three in 24 hours exit 1. On the real server: SIGSEGV to `srcds_linux`, Docker restarted the container with exit 139, the next timer run said it once and the run after said nothing ([run 43618366259](https://github.com/heyvaldemar/l4d2-server-docker-compose/actions/runs/43618366259)). `tests/restarts.sh` runs all three shapes on real containers.
@@ -114,7 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published port. The image is 3.3 GB compressed, which a runner can hold —
   the one Source server in this family for which that is true.
 
-[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.4...v1.4.0
 [1.3.4]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/heyvaldemar/l4d2-server-docker-compose/compare/v1.3.2...v1.3.3
