@@ -242,6 +242,18 @@ if [ "$MODE" != check ]; then
     ev=$(docker events --since $(( bsince - 60 )) --until $(( $(now) + 2 )) --filter "container=$rid" --filter event=die --filter event=oom \
       --format '{{.Action}} {{index .Actor.Attributes "exitCode"}}' 2>/dev/null)
     rexit=$(awk '$1 == "die" { c = $2 } END { print c }' <<<"$ev")
+    # A KILL FOR MEMORY CAN BE STORED LATE. On a GitHub runner (Docker 29.4.2)
+    # the oom event of 1 kill in 20 was not there when the die was, and was
+    # 10 seconds later. A 137 with no oom event yet is read again, for up to
+    # ten seconds, before it is called a plain SIGKILL.
+    if [ "$rexit" = 137 ] && ! grep -q '^oom' <<<"$ev"; then
+      for _ in 1 2 3 4 5; do
+        sleep 2
+        ev=$(docker events --since $(( bsince - 60 )) --until $(( $(now) + 2 )) --filter "container=$rid" --filter event=die --filter event=oom \
+          --format '{{.Action}} {{index .Actor.Attributes "exitCode"}}' 2>/dev/null)
+        grep -q '^oom' <<<"$ev" && break
+      done
+    fi
     case "$rexit" in
       134) rexit="134 (SIGABRT)" ;; 137) rexit="137 (SIGKILL)" ;; 139) rexit="139 (SIGSEGV)" ;; 143) rexit="143 (SIGTERM)" ;;
     esac

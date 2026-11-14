@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A kill for memory is named even when Docker stores its oom event late.** On a GitHub runner (Docker 29.4.2) the oom event of 1 kill in 20 was not there when the die event was, and was ten seconds later ([run 43623563645](https://github.com/heyvaldemar/l4d2-server-docker-compose/actions/runs/43623563645)), so the timer called a kill for memory a plain SIGKILL. A 137 with no oom event yet is now read again, for up to ten seconds: twenty kills in a row, twenty named, one of them read again ([run 43624152790](https://github.com/heyvaldemar/l4d2-server-docker-compose/actions/runs/43624152790)).
+
 ### Changed
+
+- **The secret probe** names the selftest's container from the workflow, reaches the log through any process sharing process 1's output, and prints a leaked line with Steam IDs and addresses replaced.
 
 - **The stubbed container in the timer's tests has a neutral name.** The docker stand-in in `tests/steam-uptodate.sh` and `tests/read-whole.sh` answered with a container named after a machine; it is `/game-server` now. Tests only.
 
