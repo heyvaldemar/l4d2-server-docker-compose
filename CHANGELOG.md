@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_(no unreleased changes yet)_
+### Changed
+
+- **The stubbed container in the timer's tests has a neutral name.** The docker stand-in in `tests/steam-uptodate.sh` and `tests/read-whole.sh` answered with a container named after a machine; it is `/game-server` now. Tests only.
 
 ## [1.5.0] - 2026-11-14
 
