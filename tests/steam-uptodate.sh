@@ -14,7 +14,10 @@
 #             the image (said once, exit 1 every run); the image updating on
 #             restart; A2S silent, tolerated and then not; Steam silent;
 #             another update on this host, by its lock and by its stamp;
-#             --dry-run; --check; a stopped server; a symlinked state file
+#             --dry-run; --check; a stopped server; a symlinked state file;
+#             restarts Docker did (said once with the crash line, masked; 3 in
+#             24 h exit 1; a count back at 0 or a new container counted afresh;
+#             out of memory; an inspect that fails)
 #   plants    four copies with one rule taken out each - the player count,
 #             the proof by Steam, the host lock, the daily limit - and each
 #             is seen doing exactly what the rule prevents, so the cases
@@ -44,8 +47,13 @@ cat >"$T/bin/docker" <<'STUB'
 echo "$*" >>"$CASE/docker.log"
 case " $* " in
   *" ps -q "*) [ -e "$CASE/down" ] || echo 0123456789ab ;;
+  *" logs --until "*) cat "$CASE/crashlog" 2>/dev/null ;;
   *" logs "*) echo "${HOW_UNDER_TEST}: updated build 1 -> 2" ;;
+  *RestartCount*) [ -e "$CASE/inspect-fails" ] && exit 1
+                  echo "/srv-1 $(cat "$CASE/restarts" 2>/dev/null || echo "c1 0") 2026-11-14T08:12:31Z 2026-11-14T08:12:40Z" ;;
+  *" events "*) if [ -n "${OOM:-}" ]; then printf 'oom \ndie 137\n'; else echo "die 139"; fi ;;
   *" inspect "*) echo "172.18.0.2 " ;;
+  *" restart "*) echo "c1 0" >"$CASE/restarts" ;;
 esac
 exit 0
 STUB
@@ -181,6 +189,37 @@ fresh "$HOW"; answers "$OLD"; touch "$CASE/down"; run; a=$rc; run --check; b=$rc
 fresh "$HOW"; answers "$OLD"; ln -s /etc/passwd "$CASE/repo/.steam-uptodate-state"; run
 [ "$rc" = 1 ] && [[ $out == *"symlink"* ]] && pass "a symlinked state file is refused" || fail "symlink: exit $rc, $out"
 
+echo "=== restarts Docker did, which the health check cannot see ==="
+rst() { cat "$CASE/repo/.steam-uptodate-restarts" 2>/dev/null; }
+fresh "$HOW"; answers "$NEW"; echo "c1 0" >"$CASE/restarts"; run
+[ "$rc" = 0 ] && [[ $(rst) == "/srv-1 c1 0 "* ]] && [ "$(told)" = 0 ] \
+  && pass "the first run writes down name, container and count, and says nothing" || fail "restart baseline: exit $rc, $out"
+echo "c1 2" >"$CASE/restarts"
+printf '%s\n' 'map de_dust2 loaded' 'FATAL ERROR: Ran out of networkable entities +sv_setsteamaccount 0123456789ABCDEF0123456789ABCDEF' >"$CASE/crashlog"; run
+[ "$rc" = 0 ] && [[ $out == *"the server restarted 2 times since "*", last exit code 139 (SIGSEGV), last finished 2026-11-14T08:12:31Z; its log before that: FATAL ERROR: Ran out of networkable entities +sv_setsteamaccount <masked> (2 in 24 h)"* ]] \
+  && [ "$(told)" = 1 ] && pass "two restarts: said once, with the crash line and a long token masked, exit 0 below the limit" || fail "restarts seen: exit $rc, told $(told), $out"
+run
+[ "$rc" = 0 ] && [ "$(told)" = 1 ] && pass "the next run, nothing new: says nothing" || fail "after the restarts: exit $rc, $out"
+echo "c1 0" >"$CASE/restarts"; run
+[ "$rc" = 0 ] && [ "$(told)" = 1 ] && [[ $(rst) == "/srv-1 c1 0 "* ]] \
+  && pass "the count back at 0 (a restart by hand): the new starting point, nothing said" || fail "count reset: exit $rc, $out"
+echo "c1 1" >"$CASE/restarts"; rm -f "$CASE/crashlog"; run
+[ "$rc" = 1 ] && [[ $out == *"restarted 1 time since"*"(3 in 24 h)"* ]] && [ "$(told)" = 2 ] \
+  && pass "a third restart in 24 hours: exit 1" || fail "the limit: exit $rc, $out"
+echo "c2 0" >"$CASE/restarts"; run
+[ "$rc" = 0 ] && [[ $(rst) == "/srv-1 c2 0 "* ]] && pass "a new container (recreated): counted afresh, nothing said" || fail "new container: exit $rc, $out"
+fresh "$HOW"; answers "$NEW"; echo "c1 0" >"$CASE/restarts"; run; echo "c1 1" >"$CASE/restarts"; OOM=true run
+[[ $out == *"restarted 1 time since"*"; killed for memory (oom event, exit 137 (SIGKILL))"* ]] && pass "an oom event: killed for memory, exit 137 named" || fail "OOM: $out"
+fresh "$HOW"; answers "$NEW"; echo "c1 0" >"$CASE/restarts"; run; touch "$CASE/inspect-fails"; before=$(rst); run
+[ "$rc" = 1 ] && [[ $out == *"cannot read the restart count"* ]] && [ "$(rst)" = "$before" ] \
+  && pass "an inspect that fails: exit 1, the state untouched" || fail "inspect fails: exit $rc, $out"
+fresh restart; answers "$OLD" "$OLD" "$NEW"; echo "c1 2" >"$CASE/restarts"; run; answers "$OLD" "$OLD" "$NEW"
+printf '%s\n' "$(( $(date +%s) - 7200 ))" >"$CASE/repo/.steam-uptodate-updates"; run; r1=$rc; answers "$NEW"; run
+[ "$rc" = 0 ] && [ "$(told)" -le 1 ] && [[ $(rst) == "/srv-1 c1 0 "* ]] \
+  && pass "the script's own update restart sets the count to 0: no alarm after it" || fail "own restart: exits $r1 $rc, told $(told), $out"
+fresh "$HOW"; answers "$NEW"; echo "c1 0" >"$CASE/restarts"; run; echo "c1 1" >"$CASE/restarts"; run --check
+[ "$rc" = 0 ] && pass "--check says only what Steam says" || fail "--check with a restart: exit $rc, $out"
+
 echo "=== plants: each rule taken out, and seen gone ==="
 fresh restart 's/^if \[ "\$humans" != 0 \]; then$/if false; then/'; answers "$BUSY" "11191711 3 1 -"; run
 [ "$(asked ' restart ')" -ge 1 ] && pass "without the player count it restarts with 3 on: the people-on case can tell" \
@@ -192,6 +231,10 @@ fresh restart 's/^if ! flock -n 9; then$/if false; then/'; answers "$OLD"
 ( flock 8; sleep 3 ) 8>>"$CASE/host.lock" & sleep 0.5; run; wait
 [ "$(asked ' restart ')" -ge 1 ] && pass "without the host lock it updates while another server does: the lock case can tell" \
   || fail "the lock plant did not update ($out)"
+fresh "$HOW" 's/ || \[ "\$rcount" -lt "\$bcount" \]; then$/; then/'; answers "$NEW"
+echo "c1 2" >"$CASE/restarts"; run; echo "c1 0" >"$CASE/restarts"; run; echo "c1 1" >"$CASE/restarts"; run
+[ "$rc" = 0 ] && [[ $out != *"restarted"* ]] && pass "without a fallen count as the new start, a crash after a restart by hand goes unseen: the reset case can tell" \
+  || fail "the reset plant still saw it ($out)"
 fresh restart 's/^if \[ "\$tries" -ge "\$MAX_TRIES" \]; then$/if false; then/'; answers "$OLD"
 printf '%s\n' $((now - 7200)) $((now - 3600)) $((now - 60)) >"$CASE/repo/.steam-uptodate-updates"; run
 [ "$(asked ' restart ')" -ge 1 ] && pass "without the daily limit it tries a fourth time: the limit case can tell" \

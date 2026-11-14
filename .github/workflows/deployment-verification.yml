@@ -111,6 +111,14 @@ jobs:
       - name: The Steam check, every branch, against stubbed answers
         run: bash tests/steam-uptodate.sh
 
+      - name: Restarts said once, Docker's and srcds_run's
+        # Real containers: one that crashes under Docker's restart policy, one
+        # killed for memory, and one whose game process dies and comes back
+        # inside it, as srcds_run brings it back. tools/steam-uptodate.sh says
+        # each once, with the exit code or the crash line, and exits 1 at
+        # three in a day.
+        run: bash tests/restarts.sh
+
       - name: Every script in tools/ is read whole before it runs
         run: bash tests/read-whole.sh
 
@@ -133,6 +141,12 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    env:
+      # tests/secret-probe.sh: the RCON password gets a value of its own, and
+      # it may not reach docker compose logs, a command line in the container
+      # or the host's ps.
+      PROBE_PROJECT: l4d2
+      PROBE_EXPECT: L4D2_SERVER_RCON_PASSWORD
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -164,8 +178,10 @@ jobs:
         run: |
           sed -E 's/^([A-Z0-9_]+)=$/\1=ci-placeholder/' .env.example > .env
           # A random password, so the command-line check below looks for a
-          # value nothing else on the runner could hold.
-          sed -i "s/^L4D2_SERVER_RCON_PASSWORD=.*/L4D2_SERVER_RCON_PASSWORD=$(openssl rand -hex 16)/" .env
+          # value nothing else on the runner could hold: tests/secret-probe.sh
+          # plant writes it by awk through its environment, never on a command
+          # line, and keeps it for the probe.
+          tests/secret-probe.sh plant
           docker compose -f l4d2-server-docker-compose.yml -p l4d2 up -d
 
       - name: Wait for the health check to go green
@@ -174,7 +190,7 @@ jobs:
           for _ in $(seq 1 60); do
             s="$(docker inspect "$cid" --format '{{.State.Health.Status}}' 2>/dev/null || echo none)"
             echo "health: $s"
-            [ "$s" = healthy ] && exit 0
+            if [ "$s" = healthy ]; then tests/secret-probe.sh check "first start"; exit $?; fi
             [ "$s" = unhealthy ] && break
             sleep 10
           done
@@ -335,6 +351,59 @@ jobs:
           done
           echo "::error::the game did not answer again after SIGCONT"; exit 1
 
+      - name: The rcon client, watched - and after a restart, the probe looks again
+        run: |
+          tests/secret-probe.sh during "rcon status" tools/rcon.sh status
+          cid="$(docker compose -f l4d2-server-docker-compose.yml -p l4d2 ps -q l4d2-server)"
+          docker compose -f l4d2-server-docker-compose.yml -p l4d2 restart l4d2-server >/dev/null
+          for _ in $(seq 1 60); do docker exec "$cid" bash /healthcheck.sh 27015 >/dev/null 2>&1 && break; sleep 5; done
+          docker exec "$cid" bash /healthcheck.sh 27015
+          tests/secret-probe.sh check "after a restart"
+
+      - name: The probe sees what it looks for - a canary in a log and on two command lines
+        run: tests/secret-probe.sh selftest
+
+      - name: A crash - srcds_run or Docker brings the game back, and the timer says so once
+        # The health check runs inside the container and a crash gives it a
+        # fresh game soon after: green again. tools/steam-uptodate.sh runs on
+        # the host and says it, from Docker's restart count or, when srcds_run
+        # restarted the game inside the container, from the game process's
+        # start time. Here: a run that writes both down, SIGSEGV to the game,
+        # the game answering again, a run that must say it and one that must
+        # not.
+        run: |
+          cid="$(docker compose -f l4d2-server-docker-compose.yml -p l4d2 ps -q l4d2-server)"
+          rc=0; out="$(tools/steam-uptodate.sh 2>&1)" || rc=$?
+          echo "before the crash: exit $rc: $out"
+          # shellcheck disable=SC2016  # expanded by the container's shell
+          pid="$(docker exec "$cid" sh -c 'for p in /proc/[0-9]*; do [ "$(cat "$p/comm" 2>/dev/null)" = srcds_linux ] && echo "${p#/proc/}"; done' | head -1)"
+          [ -n "$pid" ] || { echo "::error::no srcds_linux process"; exit 1; }
+          docker exec "$cid" sh -c "kill -SEGV $pid"
+          echo "SIGSEGV to srcds_linux, pid $pid"
+          sleep 5
+          for _ in $(seq 1 60); do docker exec "$cid" bash /healthcheck.sh 27015 >/dev/null 2>&1 && break; sleep 5; done
+          docker exec "$cid" bash /healthcheck.sh 27015
+          echo "after: $(docker inspect -f 'restarts={{.RestartCount}} started={{.State.StartedAt}}' "$cid")"
+          rc=0; out="$(tools/steam-uptodate.sh 2>&1)" || rc=$?
+          echo "after the crash: exit $rc: $out"
+          if [ "$rc" != 0 ] || ! grep -q -E "the game restarted inside its container since|the server restarted 1 time since" <<<"$out"; then
+            echo "::error::the timer did not report the crash once"; exit 1
+          fi
+          rc=0; out="$(tools/steam-uptodate.sh 2>&1)" || rc=$?
+          echo "the next run: exit $rc: $out"
+          if [ "$rc" != 0 ] || grep -q "restarted" <<<"$out"; then echo "::error::the timer reported the same crash twice"; exit 1; fi
+          rm -f .steam-uptodate-*
+
+      - name: A stop - timed, with its exit code (tests/clean-stop.sh; no world to save)
+        env:
+          CLEAN_STOP_PROJECT: l4d2
+          CLEAN_STOP_COMPOSE: l4d2-server-docker-compose.yml
+        run: |
+          tests/clean-stop.sh l4d2-server -
+          docker compose -f l4d2-server-docker-compose.yml -p l4d2 up -d l4d2-server >/dev/null
+          cid="$(docker compose -f l4d2-server-docker-compose.yml -p l4d2 ps -q l4d2-server)"
+          for _ in $(seq 1 60); do docker exec "$cid" bash /healthcheck.sh 27015 >/dev/null 2>&1 && break; sleep 5; done
+
       - name: Plant - a stale version turns the check red
         # The version before the current one, written where the server reads
         # it: what this image will look like the day Valve ships an update.
@@ -359,7 +428,9 @@ jobs:
 
       - name: Stop
         if: always()
-        run: docker compose -f l4d2-server-docker-compose.yml -p l4d2 down -v --remove-orphans
+        run: |
+          docker compose -f l4d2-server-docker-compose.yml -p l4d2 down -v --remove-orphans
+          rm -f "$RUNNER_TEMP/secret-probe.values" .env
 
   sourcemod:
     name: The SourceMod plugins compile

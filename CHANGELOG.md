@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A crash is reported by the timer.** The health check runs inside the container, and after a crash Docker starts it again with a fresh game that answers: green throughout, and nothing else says the server went down. `tools/steam-uptodate.sh` now writes down Docker's restart count for the server and when the game process last started, on every run. A restart Docker did is said once, with the exit code (the signal named) and the reason when it can tell, from Docker's `oom` event or the last crash line of the log; a restarted container's own state says exit 0 and not killed for memory again, so only Docker's events keep them. A game that died and came back inside its container, as Valve's `srcds_run` brings one back, is said the same way. Three in 24 hours exit 1. On the real server: SIGSEGV to `srcds_linux`, Docker restarted the container with exit 139, the next timer run said it once and the run after said nothing ([run 43618366259](https://github.com/heyvaldemar/l4d2-server-docker-compose/actions/runs/43618366259)). `tests/restarts.sh` runs all three shapes on real containers.
+- **CI looks for the RCON password everywhere it could leak to.** `tests/secret-probe.sh` gives it a value of its own and fails on it in `docker compose logs`, on any command line in the container or in the host's `ps`, after the first start, while the rcon client runs and after a restart; it names the variable and the place, never the value. It found nothing (run 43618366259).
+- **A stop is measured.** `tests/clean-stop.sh` times `docker compose stop`: 1 second of the 30-second grace period, exit 143 (SIGTERM, through dumb-init), no SIGKILL from Docker. Left 4 Dead 2 keeps no world to save.
+
 ### Fixed
+
+- **The health check could cut its own request in two.** bash writes printf's output line by line, so the query echoing the server's challenge went out as two datagrams whenever the challenge held a newline byte (0x0a), and that try went unanswered; one check in a few thousand, which the retries covered. The request now goes to a file first and out in one write. `tests/e2e-healthcheck.sh` proves it against a stand-in whose challenge holds one: the old check sends 26 and 3 bytes and stays unhealthy, this one one datagram of 29.
 
 - **An index pushed again over the same build is no longer reported as drift.** The daily pin check compared each pin with the digest the tag's index has now and failed on any difference, so a publisher re-pushing the index over the very same images (a platform added, an attestation rewritten) turned it red for an image nobody rebuilt, and no pin would ever move to turn it green. It now also compares the linux/amd64 build under both digests, the one CI runs and proves: the same build passes with a notice naming both digests, a new build fails as drift exactly as before, and a build that cannot be read still fails.
 
